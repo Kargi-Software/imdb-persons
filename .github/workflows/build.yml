@@ -1,42 +1,56 @@
-name: Build Persons DB
+name: Build IMDb Filmography Shards
 
 on:
-  schedule:
-    - cron: '0 3 * * 1'
   workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"   # هر دوشنبه ساعت ۴ صبح UTC
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    timeout-minutes: 180
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.12"
 
-      - name: Download IMDb datasets
-        run: |
-          curl -L -o title.basics.tsv.gz https://datasets.imdbws.com/title.basics.tsv.gz
-          curl -L -o title.principals.tsv.gz https://datasets.imdbws.com/title.principals.tsv.gz
-          ls -lh *.gz
-
-      - name: Build sharded persons
-        run: |
-          python build.py
-          mkdir -p dist/persons
-          cp -r persons/* dist/persons/
-          cp version.json dist/
-          echo "Shards built: $(find dist/persons -name '*.json' | wc -l)"
-
-      - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Cache IMDb dumps
+        uses: actions/cache@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_branch: gh-pages
-          publish_dir: ./dist
-          force_orphan: true
+          path: cache
+          key: imdb-dumps-${{ github.run_id }}
+          restore-keys: |
+            imdb-dumps-
+
+      - name: Build filmography
+        run: python build_filmography.py
+
+      - name: Show output stats
+        run: |
+          echo "=== version.json ==="
+          cat version.json
+          echo ""
+          echo "=== total size ==="
+          du -sh persons
+          echo ""
+          echo "=== largest files ==="
+          find persons -name "*.json" -exec ls -lh {} + | sort -k5 -h | tail -10
+
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add persons/ version.json
+          if git diff --staged --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: update filmography shards $(date -u +%Y-%m-%d)"
+            git push
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
