@@ -2,14 +2,12 @@ name: Build Persons DB
 
 on:
   schedule:
-    - cron: '0 3 * * 1' # هر دوشنبه ساعت 3 صبح
+    - cron: '0 3 * * 1'
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -25,13 +23,15 @@ jobs:
       - name: Build sharded persons
         run: |
           python build.py
-          ls -lh persons/00/ | head -20
-          echo "Total shards: $(find persons -name '*.json' | wc -l)"
+          echo "Shards: $(find persons -name '*.json' | wc -l)"
+          ls persons/00/ | head -5
 
-      - name: Commit and push
-        run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add persons/ version.json
-          git diff --staged --quiet || git commit -m "update persons db - $(date -u +%Y-%m-%d)"
-          git push
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./
+          include: |
+            persons/**/*
+            version.json
