@@ -11,7 +11,7 @@ Output structure:
   version.json
 
 Format of each credit:
-  [tconst, category_short, character|null, primaryTitle, year]
+  [tconst, category_short, character|null, primaryTitle, startYear, endYear]
 """
 
 from __future__ import annotations
@@ -35,7 +35,6 @@ EXCLUDE_TITLE_TYPES: Set[str] = {
     "tvEpisode",
 }
 
-# فقط این categoryها نگه داشته می‌شن
 ALLOWED_CATEGORIES: Set[str] = {
     "actor",
     "actress",
@@ -144,30 +143,34 @@ def get_shard_paths(nconst: str) -> Tuple[str, str]:
 
 # ─────────────────────────── Main build ───────────────────────────
 
-def load_title_basics(path: Path) -> Dict[str, Tuple[str, Optional[int]]]:
+def load_title_basics(path: Path) -> Dict[str, Tuple[str, Optional[int], Optional[int]]]:
+    """
+    Returns: tconst → (primaryTitle, startYear, endYear)
+    """
     print("Loading title.basics ...")
-    titles: Dict[str, Tuple[str, Optional[int]]] = {}
+    titles: Dict[str, Tuple[str, Optional[int], Optional[int]]] = {}
     with gzip.open(path, "rt", encoding="utf-8", errors="replace") as f:
         header = f.readline()
         for i, line in enumerate(f, 1):
             if i % 2_000_000 == 0:
                 print(f"  basics processed {i:,} rows ...")
             parts = line.rstrip("\n").split("\t")
-            if len(parts) < 6:
+            if len(parts) < 7:
                 continue
-            tconst, title_type, primary_title, _, _, start_year = parts[:6]
+            tconst, title_type, primary_title, _, _, start_year, end_year = parts[:7]
             if title_type in EXCLUDE_TITLE_TYPES:
                 continue
-            year = parse_year(start_year)
+            start = parse_year(start_year)
+            end = parse_year(end_year)
             if primary_title and primary_title != "\\N":
-                titles[tconst] = (primary_title, year)
+                titles[tconst] = (primary_title, start, end)
     print(f"  → kept {len(titles):,} titles")
     return titles
 
 
 def build_filmography(
     principals_path: Path,
-    titles: Dict[str, Tuple[str, Optional[int]]],
+    titles: Dict[str, Tuple[str, Optional[int], Optional[int]]],
 ) -> Dict[str, List[list]]:
     print("Building filmography from title.principals ...")
     filmography: Dict[str, List[list]] = defaultdict(list)
@@ -189,14 +192,15 @@ def build_filmography(
             if tconst not in titles:
                 continue
 
-            title, year = titles[tconst]
+            title, start_year, end_year = titles[tconst]
             cat_short = CATEGORY_SHORT.get(category, category[:3])
 
             char = None
             if category in {"actor", "actress"}:
                 char = parse_characters(characters)
 
-            entry = [tconst, cat_short, char, title, year]
+            # [tt, cat, character, title, startYear, endYear]
+            entry = [tconst, cat_short, char, title, start_year, end_year]
             filmography[nconst].append(entry)
 
     print(f"  → {len(filmography):,} persons with at least one credit")
@@ -210,7 +214,7 @@ def write_shards(filmography: Dict[str, List[list]]) -> None:
     shards: Dict[Tuple[str, str], Dict[str, List[list]]] = defaultdict(dict)
 
     for nconst, credits in filmography.items():
-        # سورت بر اساس سال (جدید → قدیم)
+        # سورت بر اساس startYear (جدید → قدیم)
         credits.sort(key=lambda x: (x[4] is None, -(x[4] or 0), x[0]))
         prefix, shard = get_shard_paths(nconst)
         shards[(prefix, shard)][nconst] = credits
@@ -236,7 +240,7 @@ def write_version() -> None:
         "updated": time.strftime("%Y-%m-%d"),
         "version": time.strftime("%Y%m%d"),
         "source": "imdbws title.principals + title.basics",
-        "note": "ultra-compact filmography (actor/director/writer/producer/... only, no tvEpisode)",
+        "note": "ultra-compact filmography (with startYear + endYear for series)",
     }
     with open(VERSION_FILE, "w", encoding="utf-8") as f:
         json.dump(version, f, indent=2)
@@ -246,7 +250,7 @@ def write_version() -> None:
 def main() -> None:
     t0 = time.time()
     print("=" * 60)
-    print("IMDb Filmography Builder (ultra-compact + heavy sharding)")
+    print("IMDb Filmography Builder (ultra-compact + start/end year)")
     print("=" * 60)
 
     basics_gz = download_if_needed("basics", DATASETS["basics"])
@@ -255,7 +259,7 @@ def main() -> None:
     titles = load_title_basics(basics_gz)
     filmography = build_filmography(principals_gz, titles)
 
-    del titles  # آزاد کردن حافظه
+    del titles
 
     write_shards(filmography)
     write_version()
