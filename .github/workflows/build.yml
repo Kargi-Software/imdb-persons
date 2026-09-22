@@ -1,0 +1,37 @@
+name: Build Persons DB
+
+on:
+  schedule:
+    - cron: '0 3 * * 1' # هر دوشنبه ساعت 3 صبح
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download IMDb datasets
+        run: |
+          curl -L -o title.basics.tsv.gz https://datasets.imdbws.com/title.basics.tsv.gz
+          curl -L -o title.principals.tsv.gz https://datasets.imdbws.com/title.principals.tsv.gz
+
+      - name: Build sharded persons
+        run: |
+          python build.py
+          ls -lh persons/00/ | head -20
+          echo "Total shards: $(find persons -name '*.json' | wc -l)"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add persons/ version.json
+          git diff --staged --quiet || git commit -m "update persons db - $(date -u +%Y-%m-%d)"
+          git push
