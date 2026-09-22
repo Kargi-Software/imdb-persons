@@ -1,12 +1,15 @@
-name: Build IMDb Filmography Shards
+name: Build & Deploy IMDb Filmography
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:          # اجرای دستی
   schedule:
-    - cron: "0 3 * * 1"   # هر دوشنبه ساعت ۴ صبح UTC
+    - cron: "0 4 * * 1"      # هر دوشنبه ساعت ۰۴:۰۰ UTC
+
+permissions:
+  contents: write             # ضروری برای push روی gh-pages
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -23,34 +26,44 @@ jobs:
         uses: actions/cache@v4
         with:
           path: cache
-          key: imdb-dumps-${{ github.run_id }}
+          key: imdb-dumps-${{ runner.os }}-${{ hashFiles('build_filmography.py') }}
           restore-keys: |
-            imdb-dumps-
+            imdb-dumps-${{ runner.os }}-
 
       - name: Build filmography
         run: python build_filmography.py
 
-      - name: Show output stats
+      - name: Show stats
         run: |
           echo "=== version.json ==="
-          cat version.json
+          cat version.json || true
           echo ""
           echo "=== total size ==="
-          du -sh persons
+          du -sh persons || true
+          echo ""
+          echo "=== number of shard files ==="
+          find persons -name "*.json" | wc -l || true
           echo ""
           echo "=== largest files ==="
-          find persons -name "*.json" -exec ls -lh {} + | sort -k5 -h | tail -10
+          find persons -name "*.json" -exec ls -lh {} + 2>/dev/null | sort -k5 -h | tail -10 || true
 
-      - name: Commit & push
+      # ---------- آماده‌سازی پوشه تمیز برای deploy ----------
+      - name: Prepare publish folder
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add persons/ version.json
-          if git diff --staged --quiet; then
-            echo "No changes"
-          else
-            git commit -m "chore: update filmography shards $(date -u +%Y-%m-%d)"
-            git push
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          mkdir -p publish
+          cp -r persons publish/
+          cp version.json publish/
+          echo "Publish folder contents:"
+          ls -la publish/
+          du -sh publish/
+
+      # ---------- Deploy فقط persons + version.json روی gh-pages ----------
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./publish
+          force_orphan: true          # تاریخچه gh-pages رو سبک نگه می‌داره
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_message: "chore: update filmography shards ${{ github.run_id }}"
