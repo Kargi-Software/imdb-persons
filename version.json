@@ -1,0 +1,6 @@
+{
+  "updated": "2026-09-24",
+  "version": "20260924",
+  "source": "imdbws title.principals + title.basics + title.episode",
+  "note": "writers & producers from episodes are mapped to parent series"
+}
