@@ -6,7 +6,9 @@ on:
     - cron: "0 4 * * 1"      # هر دوشنبه ساعت ۰۴:۰۰ UTC
 
 permissions:
-  contents: write             # ضروری برای push روی gh-pages
+  contents: read
+  pages: write
+  id-token: write    
 
 jobs:
   build-and-deploy:
