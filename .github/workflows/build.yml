@@ -1,9 +1,9 @@
 name: Build & Deploy IMDb Persons
 
 on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+  workflow_dispatch:          دستی
+  schedule:
+    - cron: "0 4 * * 1"      
 
 permissions:
   contents: write
