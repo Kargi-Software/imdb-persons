@@ -6,7 +6,7 @@ on:
     - cron: "0 4 * * 1"      # هر دوشنبه ساعت ۰۴:۰۰ UTC
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write    
 
