@@ -10,7 +10,7 @@ Output:
   version.json
 
 Format of each credit:
-  [tconst, category_short, character|null, primaryTitle, startYear, endYear]
+  [tconst, category_short, character|null, primaryTitle, startYear, endYear, type_short]
 """
 
 from __future__ import annotations
@@ -68,6 +68,19 @@ CATEGORY_SHORT: Dict[str, str] = {
     "production_designer": "pd",
     "costume_designer": "cs",
     "make_up": "mu",
+}
+
+# کد کوتاه titleType (آخرین عضو هر credit)
+TYPE_SHORT: Dict[str, str] = {
+    "movie": "m",
+    "tvMovie": "tm",
+    "tvSeries": "s",
+    "tvMiniSeries": "ms",
+    "tvSpecial": "sp",
+    "short": "sh",
+    "tvShort": "ts",
+    "video": "v",
+    "videoGame": "g",
 }
 
 OUTPUT_DIR = Path("persons")
@@ -246,12 +259,13 @@ def build_filmography(
                 target_tconst = tconst
 
             cat_short = CATEGORY_SHORT.get(category, category[:2])
+            type_short = TYPE_SHORT.get(title_type, title_type)
 
             char = None
             if category in {"actor", "actress"}:
                 char = parse_characters(characters)
 
-            entry = [target_tconst, cat_short, char, primary_title, start_year, end_year]
+            entry = [target_tconst, cat_short, char, primary_title, start_year, end_year, type_short]
             filmography[nconst].append(entry)
 
     print(f"  → {len(filmography):,} persons with at least one credit")
@@ -291,7 +305,7 @@ def write_version() -> None:
         "updated": time.strftime("%Y-%m-%d"),
         "version": time.strftime("%Y%m%d"),
         "source": "imdbws title.principals + title.basics + title.episode",
-        "note": "writers & producers from episodes are mapped to parent series",
+        "note": "writers & producers from episodes are mapped to parent series; credit[6] = title type short code",
     }
     with open(VERSION_FILE, "w", encoding="utf-8") as f:
         json.dump(version, f, indent=2)
