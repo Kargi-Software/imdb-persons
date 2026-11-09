@@ -1,0 +1,6 @@
+{
+  "updated": "2026-11-09",
+  "version": "20261109",
+  "source": "imdbws title.principals + title.basics + title.episode",
+  "note": "writers & producers from episodes are mapped to parent series; credit[6] = title type short code"
+}
